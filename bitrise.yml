@@ -1,0 +1,60 @@
+---
+format_version: '13'
+default_step_lib_source: https://github.com/bitrise-io/bitrise-steplib.git
+project_type: ionic
+workflows:
+  deploy:
+    steps:
+      - activate-ssh-key@4:
+          run_if: '{{getenv "SSH_RSA_PRIVATE_KEY" | ne ""}}'
+      - git-clone@8: {}
+      - script@1:
+          inputs:
+            - content: |-
+                #!/usr/bin/env bash
+                set -xe -o pipefail
+                asdf plugin add java
+                asdf install
+      - certificate-and-profile-installer@1: {}
+      - npm@1:
+          inputs:
+            - command: ci
+      - generate-cordova-build-configuration@0: {}
+      - ionic-prepare@1:
+          inputs:
+            - platform: "$IONIC_PLATFORM"
+            - ionic_version: "$IONIC_VERSION"
+            - cordova_version: "$CORDOVA_VERSION"
+      - install-missing-android-tools@3:
+          inputs:
+            - gradlew_path: ./platforms/android/gradlew
+      - ionic-archive@2:
+          inputs:
+            - platform: "$IONIC_PLATFORM"
+            - ionic_version: "$IONIC_VERSION"
+            - cordova_version: "$CORDOVA_VERSION"
+            - target: device # emulator
+            - android_app_type: aab
+      - sign-apk@1: {}
+      - deploy-to-bitrise-io@2: {}
+
+meta:
+  bitrise.io:
+    stack: osx-xcode-14.3.x-ventura
+    machine_type_id: g2-m1.4core
+
+app:
+  envs:
+    - IONIC_VERSION: 7.1.1
+    - CORDOVA_VERSION: 12.0.0
+    - ORG_GRADLE_PROJECT_cdvMinSdkVersion: 21
+    - opts:
+        is_expand: false
+      IONIC_PLATFORM: android # ios,android
+
+trigger_map:
+  - push_branch: consistent-build
+    workflow: deploy
+  - pull_request_source_branch: "*"
+    workflow: deploy
+
